@@ -6,6 +6,7 @@ __pycache__/
 dist/
 build/
 .venv/
+.pytest_cache/
 
 # uv
 uv.lock
@@ -27,8 +28,3 @@ exchange.log
 # OS
 .DS_Store
 Thumbs.db
-
-# Old files
-app.py
-wzry_exchange.py
-wzry_login.py

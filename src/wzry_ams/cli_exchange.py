@@ -1,9 +1,7 @@
 """CLI: wzry-exchange — 命令行兑换."""
 
 import argparse
-import sys
 import time
-import os
 
 from wzry_ams import REWARD_MAP, ExchangeClient
 

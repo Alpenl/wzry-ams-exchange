@@ -3,21 +3,23 @@
 import json
 import os
 import re
-import sys
 from datetime import datetime
-from typing import Dict, Any
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
 import uvicorn
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 
-from .utils import (
-    REWARD_MAP, REQUIRED_COOKIES, ICON_BASE, PVP_PAGE,
-    parse_cookies, parse_tyinfo, load_cookies_file,
-    save_cookies_file, get_user_info,
-)
 from .exchange import ExchangeClient
-
+from .utils import (
+    ICON_BASE,
+    PVP_PAGE,
+    REQUIRED_COOKIES,
+    REWARD_MAP,
+    get_user_info,
+    load_cookies_file,
+    parse_cookies,
+    save_cookies_file,
+)
 
 # ── 应用 ──
 
@@ -369,12 +371,13 @@ def main():
     args = ap.parse_args()
 
     if args.cookies and os.path.exists(args.cookies):
-        cookies = parse_cookies(open(args.cookies).read())
+        with open(args.cookies) as f:
+            cookies = parse_cookies(f.read())
         if cookies:
             save_cookies_file(cookies, COOKIE_FILE)
             print(f"[*] 已加载 {len(cookies)} 个 Cookie")
 
-    print(f"  王者荣耀体验服兑换 Web 应用")
+    print("  王者荣耀体验服兑换 Web 应用")
     print(f"  http://{args.host}:{args.port}")
     uvicorn.run("wzry_ams.web:app", host=args.host, port=args.port,
                 log_level="info", reload=False)

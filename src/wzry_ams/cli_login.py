@@ -2,10 +2,9 @@
 
 import argparse
 import sys
-import os
 
 from wzry_ams.login import qq_scan_login
-from wzry_ams.utils import save_cookies_file, load_cookies_file
+from wzry_ams.utils import load_cookies_file, save_cookies_file
 
 
 def main():

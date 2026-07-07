@@ -1,20 +1,16 @@
 """CDP 扫码登录 — 启动 Chrome 获取 Cookie."""
 
-import hashlib
-import random
-import time
+import contextlib
 import json
 import os
-import subprocess
-import signal
-import tempfile
+import random
 import shutil
-from typing import Dict, Optional, List
-from urllib.parse import unquote
+import signal
+import subprocess
+import tempfile
+import time
 
 import requests
-
-from .utils import parse_tyinfo, save_cookies_file
 
 try:
     import websocket
@@ -79,8 +75,8 @@ def _cdp_ws_send(ws, method: str, params: dict = None) -> dict:
 
 class ChromeManager:
     def __init__(self):
-        self.process: Optional[subprocess.Popen] = None
-        self.profile_dir: Optional[str] = None
+        self.process: subprocess.Popen | None = None
+        self.profile_dir: str | None = None
 
     def start(self):
         if not CHROME_PATH:
@@ -119,19 +115,15 @@ class ChromeManager:
 
     def stop(self):
         if self.process:
-            try:
+            with contextlib.suppress(Exception):
                 os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
-            except Exception:
-                pass
             self.process = None
             time.sleep(0.5)
         if self.profile_dir and os.path.exists(self.profile_dir):
-            try:
+            with contextlib.suppress(Exception):
                 shutil.rmtree(self.profile_dir, ignore_errors=True)
-            except Exception:
-                pass
 
-    def get_cookies(self, ws, urls: List[str] = None) -> Dict[str, str]:
+    def get_cookies(self, ws, urls: list[str] = None) -> dict[str, str]:
         if urls is None:
             urls = [
                 "https://pvp.qq.com", "https://game.qq.com",
@@ -150,7 +142,7 @@ class ChromeManager:
 
 # ── 登录流程 ──
 
-def qq_scan_login(output_path: str = "cookies.txt", timeout: int = 180) -> Dict[str, str]:
+def qq_scan_login(output_path: str = "cookies.txt", timeout: int = 180) -> dict[str, str]:
     """CDP 扫码登录流程。返回 Cookie 字典。"""
     if websocket is None:
         raise ImportError("需要 websocket-client: pip install websocket-client")

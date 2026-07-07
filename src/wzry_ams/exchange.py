@@ -1,25 +1,27 @@
 """AMS 兑换客户端 — 被 CLI 和 Web 复用."""
 
-import json
-import random
-import time
-from typing import Dict, Any
+from typing import Any
 
 import requests
 
 from .utils import (
-    REWARD_MAP, REQUIRED_COOKIES,
-    md5, g_tk, ts, sdid,
-    parse_tyinfo, parse_cookies,
-    load_cookies_file, save_cookies_file, get_user_info,
-    UA, AMS_BASE, PVP_PAGE,
+    AMS_BASE,
+    PVP_PAGE,
+    REWARD_MAP,
+    UA,
+    g_tk,
+    load_cookies_file,
+    parse_cookies,
+    parse_tyinfo,
+    sdid,
+    ts,
 )
 
 
 class ExchangeClient:
     """王者荣耀体验服 AMS 兑换客户端"""
 
-    def __init__(self, cookies: Dict[str, str], skey: str = "a1b2c3"):
+    def __init__(self, cookies: dict[str, str], skey: str = "a1b2c3"):
         self.cookies = cookies
         self.skey = skey
 
@@ -49,7 +51,7 @@ class ExchangeClient:
         for k, v in cookies.items():
             self.session.cookies.set(k, v, domain=".qq.com")
 
-    def exchange(self, flow_id: int, activity_id: int = 126433) -> Dict[str, Any]:
+    def exchange(self, flow_id: int, activity_id: int = 126433) -> dict[str, Any]:
         """执行一次兑换 (form-encoded POST)."""
         params = {
             "ameVersion": "0.3",
@@ -77,7 +79,7 @@ class ExchangeClient:
         resp.raise_for_status()
         return resp.json()
 
-    def exchange_reward(self, reward_index: str) -> Dict[str, Any]:
+    def exchange_reward(self, reward_index: str) -> dict[str, Any]:
         """按奖励编号兑换."""
         reward = REWARD_MAP.get(str(reward_index))
         if not reward:

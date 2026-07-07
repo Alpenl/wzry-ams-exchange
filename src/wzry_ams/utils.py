@@ -1,13 +1,12 @@
 """王者荣耀体验服 AMS 兑换 - 共享工具模块."""
 
 import hashlib
+import os
 import random
 import string
 import time
 from datetime import datetime
-from typing import Dict
 from urllib.parse import unquote
-
 
 # ── 常量 ──
 
@@ -71,7 +70,7 @@ def ams_serial(activity_id: int, flow_id: int) -> str:
 
 # ── Cookie 解析 ──
 
-def parse_tyinfo(cookie_value: str) -> Dict[str, str]:
+def parse_tyinfo(cookie_value: str) -> dict[str, str]:
     """解析 a20161115tyf_tyinfo cookie."""
     result = {}
     for pair in unquote(cookie_value).split("@"):
@@ -81,14 +80,14 @@ def parse_tyinfo(cookie_value: str) -> Dict[str, str]:
     return result
 
 
-def parse_cookies(source: str) -> Dict[str, str]:
+def parse_cookies(source: str) -> dict[str, str]:
     """解析多种 Cookie 格式 (JSON / Netscape / key=value)."""
     s = source.strip()
     if s.startswith("{"):
         import json
         return json.loads(s)
 
-    cookies: Dict[str, str] = {}
+    cookies: dict[str, str] = {}
     if "\t" not in s and "\n" not in s and ";" in s:
         s = s.replace(";", "\n")
 
@@ -105,22 +104,21 @@ def parse_cookies(source: str) -> Dict[str, str]:
     return cookies
 
 
-def load_cookies_file(path: str) -> Dict[str, str]:
+def load_cookies_file(path: str) -> dict[str, str]:
     if not path or not os.path.exists(path):
         return {}
     with open(path) as f:
         return parse_cookies(f.read())
 
 
-def save_cookies_file(cookies: Dict[str, str], path: str):
-    import os as _os
+def save_cookies_file(cookies: dict[str, str], path: str):
     with open(path, "w") as f:
         for k, v in sorted(cookies.items()):
             if v:
                 f.write(f"{k}={v}\n")
 
 
-def get_user_info(cookies: Dict[str, str]) -> Dict[str, str]:
+def get_user_info(cookies: dict[str, str]) -> dict[str, str]:
     info = {
         "openid": cookies.get("openid", "")[:20] + "...",
         "acctype": cookies.get("acctype", "?"),
@@ -136,7 +134,3 @@ def get_user_info(cookies: Dict[str, str]) -> Dict[str, str]:
         info["exp_voucher"] = "?"
         info["has_tyinfo"] = False
     return info
-
-
-# 避免循环导入
-import os
