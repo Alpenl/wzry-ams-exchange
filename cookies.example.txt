@@ -1,0 +1,6 @@
+openid=你的openid
+access_token=你的access_token
+appid=101491592
+acctype=qc
+iegams_milo_proxylogin_qc=101491592_%24%24_你的openid_%24%24_你的access_token
+a20161115tyf_tyinfo=iRet%2C0@sMsg%2Cok@exp_voucher%2C0@zf_openid%2C你的zf_openid@zf_area%2C1@zf_partition%2C1306@ty_openid%2C你的ty_openid@code%2C0@holdUsed%2C0

@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+
+# uv
+uv.lock
+
+# Secrets
+cookies.txt
+*.cookies
+
+# Logs
+exchange.log
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Old files
+app.py
+wzry_exchange.py
+wzry_login.py
