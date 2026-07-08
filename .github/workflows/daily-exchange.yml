@@ -1,0 +1,50 @@
+name: daily-exchange
+
+on:
+  schedule:
+    # 北京时间 9:00 (UTC 1:00)
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  exchange:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Write cookies from secret
+        run: echo "${{ secrets.COOKIES_FILE }}" > cookies.txt
+
+      - name: Random delay (simulate human timing)
+        run: |
+          DELAY=$(( RANDOM % 7200 ))
+          echo "Sleeping ${DELAY}s (~$((DELAY/60))min)..."
+          sleep $DELAY
+
+      - name: Exchange reward #1 (亲密玫瑰 40)
+        run: uv run wzry-exchange -c cookies.txt -r 1
+        continue-on-error: true
+
+      - name: Exchange reward #2 (大型钻石福袋 50)
+        run: uv run wzry-exchange -c cookies.txt -r 2
+        continue-on-error: true
+
+      - name: Exchange reward #3 (星币福袋 60)
+        run: uv run wzry-exchange -c cookies.txt -r 3
+        continue-on-error: true
+
+      - name: Exchange reward #4 (碎片福袋 80)
+        run: uv run wzry-exchange -c cookies.txt -r 4
+        continue-on-error: true
+
+      - name: Exchange reward #5 (浓情玫瑰 80)
+        run: uv run wzry-exchange -c cookies.txt -r 5
+        continue-on-error: true
+
+      - name: Exchange reward #6 (体验服专属头像框 900)
+        run: uv run wzry-exchange -c cookies.txt -r 6
+        continue-on-error: true
