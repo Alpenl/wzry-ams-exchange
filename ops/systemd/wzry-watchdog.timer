@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the WZRY Daily Run at 11:30 and 13:30 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 11:30:00 Asia/Shanghai
+OnCalendar=*-*-* 13:30:00 Asia/Shanghai
+Unit=wzry-watchdog.service
+
+[Install]
+WantedBy=timers.target

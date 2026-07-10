@@ -1,0 +1,7 @@
+[Unit]
+Description=Ensure the WZRY Daily Run exists
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/wzry-watchdog.env
+ExecStart=/usr/bin/env --chdir=${WZRY_PROJECT_DIR} ${WZRY_PROJECT_DIR}/.venv/bin/wzry-watchdog --dispatch
