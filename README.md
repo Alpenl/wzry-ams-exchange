@@ -1,76 +1,200 @@
 # 王者荣耀体验服 AMS 兑换逆向
 
-## 目录结构
+这是一个面向学习与研究的王者荣耀体验服 AMS 奖励兑换工具，提供扫码登录、单项或批量兑换、Web 操作界面，以及每日自动运行与漏跑补偿能力。
 
-```
-wzry-ams-exchange/
-├── README.md              # 本文档：逆向分析报告
-├── app.py                 # Web 应用 (FastAPI 单文件部署)
-├── wzry_exchange.py       # CLI 兑换脚本
-├── wzry_login.py          # CDP 扫码登录获取 Cookie
-├── cookies.txt            # 你的 Cookie（勿提交）
-├── cookies.example.txt    # Cookie 模板
-└── .gitignore
-```
+## 功能
+
+- `wzry-login`：通过本机 Chrome/CDP 完成 QQ 扫码登录，并在完整兑换凭据就绪后生成 Credential Bundle。
+- `wzry-exchange`：列出奖励、兑换单项奖励或执行完整 Exchange Plan。
+- `wzry-web`：在浏览器中管理凭据、查看状态并兑换奖励。
+- `wzry-watchdog`：从独立调度器检查当天的 GitHub Actions Daily Run，按需请求补偿执行。
+
+“已经兑换”与“本期只能兑换一次”等结果视为 **Already Satisfied**：奖励目标已经满足，批量执行和自动补跑不应因此失败。登录失效、传输异常、协议异常、无效配置或明确的业务拒绝会使命令返回非零退出码。
+
+## 环境要求
+
+- Python 3.10 或更高版本。
+- [uv 0.9.28](https://docs.astral.sh/uv/)；项目会校验工具版本，依赖由已提交的 `uv.lock` 锁定。
+- 使用 `wzry-login` 时，需要本机安装 Chrome/Chromium，并具备图形桌面或可显示二维码的环境。
 
 ## 快速开始
 
-### Web 应用 (推荐，可部署服务器)
+安装锁定依赖：
 
 ```bash
-# 1. 安装依赖
-pip install fastapi uvicorn requests
-
-# 2. 启动 Web 应用
-python app.py                        # 默认 http://0.0.0.0:8080
-python app.py --port 80              # 指定端口
-python app.py --cookies cookies.txt  # 启动时加载 Cookie
-
-# 3. 浏览器打开 http://localhost:8080
-#    - 粘贴 Cookie 或上传 cookies.txt
-#    - 点击奖励卡片直接兑换
+uv sync --locked
 ```
 
-### CLI 命令行
+扫码登录并将凭据写入 `cookies.txt`：
 
 ```bash
-# 1. 安装依赖
-pip install websocket-client requests
-
-# 2. 扫码登录获取 Cookie (需要 Chrome 浏览器 + 显示器)
-python wzry_login.py
-
-# 3. 兑换
-python wzry_exchange.py -c cookies.txt -r 3   # 星币福袋
-python wzry_exchange.py -c cookies.txt --list  # 查看列表
+uv run wzry-login --output cookies.txt
 ```
 
----
+命令只有在代理票据和 Activity Identity 也已取得、Credential Bundle 可以直接用于兑换时才返回 `0`。如果 QQ 登录已完成但活动 Cookie 尚未就绪，命令会继续等待，并在超时后明确报告凭据不完整而不会覆盖现有文件。
 
-## Web 应用 API
+查看奖励并执行兑换：
+
+```bash
+uv run wzry-exchange --list
+uv run wzry-exchange --cookies cookies.txt --reward 3
+uv run wzry-exchange --cookies cookies.txt --all
+```
+
+`--all` 按稳定顺序检查所有奖励，并以一次 Exchange Report 决定整个进程的退出码。需要查看完整参数时使用：
+
+```bash
+uv run wzry-login --help
+uv run wzry-exchange --help
+uv run wzry-web --help
+uv run wzry-watchdog --help
+```
+
+## Web 应用
+
+本地启动时默认只监听 `127.0.0.1:8080`，不会直接暴露到局域网或公网：
+
+```bash
+uv run wzry-web --cookies cookies.txt
+```
+
+默认凭据与日志路径分别是当前工作目录下的 `cookies.txt` 和 `exchange.log`。服务化运行时可显式指定受控路径：
+
+```bash
+WZRY_COOKIE_FILE=/var/lib/wzry-ams/cookies.txt \
+WZRY_LOG_FILE=/var/lib/wzry-ams/exchange.log \
+uv run wzry-web
+```
+
+浏览器打开 <http://127.0.0.1:8080>。只有在明确配置了网络边界、认证和 TLS 后，才应监听所有网卡：
+
+```bash
+uv run wzry-web --host 0.0.0.0 --port 8080 --cookies cookies.txt
+```
+
+Web API：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/` | Web 页面 |
-| GET | `/api/status` | Cookie 状态 + 用户信息 |
-| POST | `/api/cookies` | 设置 Cookie `{"raw":"..."}` |
-| POST | `/api/exchange` | 兑换 `{"reward":"3"}` |
-| GET | `/api/log` | 兑换日志 |
-| DELETE | `/api/cookies` | 清除 Cookie |
+| `GET` | `/` | Web 页面 |
+| `GET` | `/api/status` | Credential Bundle 状态与用户信息 |
+| `POST` | `/api/cookies` | 设置凭据，JSON body 为 `{"raw":"..."}` |
+| `POST` | `/api/exchange` | 兑换奖励，JSON body 为 `{"reward":"3"}` |
+| `GET` | `/api/log` | 最近的兑换日志 |
+| `DELETE` | `/api/cookies` | 清除当前凭据 |
 
-## 部署建议
+## Cookie 安全
+
+`cookies.txt` 包含可代表账号登录状态的 `access_token`、OpenID 和活动身份信息，应按密码或 API Token 的标准处理：
+
+- 不要提交到 Git，不要放入镜像，不要粘贴到 Issue、Action 日志或聊天记录。
+- 使用默认的 `cookies.txt`，或采用 `*.credentials` / `*.credentials.json` 命名；仓库会忽略这些约定名称。任意自定义文件名无法由忽略规则自动识别。
+- 本地文件建议执行 `chmod 600 cookies.txt`，仅允许当前用户读取。
+- 不使用时及时删除；发现泄露时立即重新登录并使旧登录态失效。
+- GitHub Actions 只通过加密 Secret `COOKIES_FILE` 注入，Secret 内容应是完整文件文本。
+- Web 页面没有面向公网的账号系统。默认本地监听是安全边界的一部分，不能替代反向代理认证、访问控制与 TLS。
+- Cookie 可能在数小时内过期；自动调度成功不代表长期凭据永远有效，应关注认证失效的失败结果。
+
+仓库的 `.gitignore` 和 `.dockerignore` 会排除常见凭据文件，但这只是最后一道保护，不能替代凭据管理。
+
+Credential Bundle 是面向单一 AMS 端点的 `name -> value` 投影，不保存浏览器 Cookie 的 domain/path 元数据。CDP 登录会优先保留活动页可见的同名 Cookie，文本或 Netscape 格式则保留文件中第一个同名值；不要手工拼接多个账号或多个浏览器 profile 的导出内容。
+
+## Docker
+
+镜像采用固定版本及 digest 的 Python 与 uv、多阶段锁定安装，并以非 root 用户运行。构建时不会包含 `cookies.txt`、日志、Git 元数据或本地虚拟环境：
 
 ```bash
-# 生产环境 (gunicorn + uvicorn)
-pip install gunicorn
-gunicorn -w 4 -k uvicorn.workers.UvicornWorker app:app -b 0.0.0.0:80
-
-# Docker
-docker run -d -p 8080:8080 -v ./cookies.txt:/app/cookies.txt \
-    python:3.11-slim sh -c "pip install fastapi uvicorn requests && python app.py --port 8080"
+docker build --tag wzry-ams-exchange:local .
 ```
 
-Cookie 持久化在本地文件 `cookies.txt`，生产环境可改为 Redis/数据库。
+默认入口为 `wzry-web --host 0.0.0.0 --port 8080`。将宿主端口绑定到回环地址，可保持 Web 只对本机可见：
+
+```bash
+docker volume create wzry-ams-data
+
+docker run --rm --name wzry-ams-exchange \
+  --publish 127.0.0.1:8080:8080 \
+  --mount type=volume,src=wzry-ams-data,dst=/data \
+  --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+  --cap-drop ALL \
+  --security-opt no-new-privileges=true \
+  wzry-ams-exchange:local
+```
+
+打开 <http://127.0.0.1:8080> 后，通过页面粘贴或上传 Credential Bundle。镜像把 `WZRY_COOKIE_FILE` 和 `WZRY_LOG_FILE` 分别设置为 `/data/cookies.txt` 与 `/data/exchange.log`，上述命名卷会持久化这两个文件。不要用 `COPY`、构建参数或环境变量把 Cookie 烘焙进镜像；在编排平台上应优先用运行时 Secret 初始化 `/data/cookies.txt`，并保持 Secret 与数据卷的访问权限最小化。
+
+## 每日自动运行
+
+`.github/workflows/daily-exchange.yml` 是主触发器：它在 GitHub Actions 中执行每日 Exchange Plan，也支持 `workflow_dispatch` 手动补跑。仓库 Secret `COOKIES_FILE` 必须包含有效凭据。
+
+每次重新扫码后，用 GitHub CLI 轮换 Secret：
+
+```bash
+uv run wzry-login --output cookies.txt
+gh secret set COOKIES_FILE < cookies.txt
+```
+
+GitHub Actions 可以自动执行兑换，但无法代替交互式 QQ 登录续期。静态 Secret 过期后，主任务和 watchdog 补跑都会如实失败；watchdog 解决的是调度漏跑，不是认证续期。需要真正长期无人值守时，必须在受控的外部执行端实现凭据刷新并轮换 Secret，或把 Daily Run 一并迁移到该执行端。
+
+GitHub 的 `schedule` 是 best-effort 调度，可能延迟，极端情况下可能丢弃。当前 cron 已避开整点高峰，但这不构成“每日必达”保证。因此工程化方案把两个角色分开：
+
+| 角色 | 责任 | 边界 |
+|------|------|------|
+| Daily workflow | 执行兑换并产出可信的成功/失败状态 | 不保证 GitHub 一定准时创建 run |
+| 外部 watchdog | 从 GitHub 之外检查当天是否已有成功或仍在运行的 Daily Run | 默认只检查；只有显式授权才补触发 |
+
+watchdog 的推荐调用方式：
+
+```bash
+# 私有仓库读取 run 时需要 Token；触发补跑时 Token 需要 Actions 写权限
+export WZRY_GITHUB_TOKEN=github_pat_xxx
+
+# 只检查，不改变 GitHub 状态
+uv run wzry-watchdog --repo OWNER/REPO --workflow daily-exchange.yml
+
+# 缺少有效 Daily Run 时请求 workflow_dispatch
+uv run wzry-watchdog --repo OWNER/REPO --workflow daily-exchange.yml --dispatch
+```
+
+watchdog 从 `WZRY_GITHUB_TOKEN` 或 `GITHUB_TOKEN` 读取凭据。默认检查模式发现缺少有效 Daily Run 时返回非零退出码，方便监控系统告警；`--dispatch` 才会改变 GitHub 状态。它必须运行在独立于 GitHub `schedule` 的调度器上，例如 systemd timer、云定时任务或另一套 CI。不要把 watchdog 安排在主 cron 同一时刻，应留出正常调度与运行所需的缓冲时间。
+
+仓库提供了 [systemd user timer 模板](ops/systemd/)，默认在北京时间 `11:30` 和 `13:30` 检查。timer 不使用 `Persistent=true`，因此不会在次日登录时把昨日漏掉的检查错误补到今天。GitHub API 的临时网络失败会在单次检查中进行三次有界重试。
+
+先在仓库内创建由 `uv.lock` 驱动的运行环境，再编辑环境文件中的仓库、绝对项目路径与 Token：
+
+```bash
+uv sync --locked --no-dev
+install -d ~/.config/systemd/user
+install -m 644 ops/systemd/wzry-watchdog.service ~/.config/systemd/user/
+install -m 644 ops/systemd/wzry-watchdog.timer ~/.config/systemd/user/
+install -m 600 ops/systemd/wzry-watchdog.env.example ~/.config/wzry-watchdog.env
+${EDITOR:-vi} ~/.config/wzry-watchdog.env
+
+systemctl --user daemon-reload
+systemctl --user enable --now wzry-watchdog.timer
+systemctl --user list-timers wzry-watchdog.timer
+```
+
+无常驻登录会话的服务器还需要启用该用户的 systemd lingering，或将模板改为系统级 unit；否则用户退出登录后 timer 可能不会继续运行。
+
+## 项目结构
+
+```text
+wzry-ams-exchange/
+├── .github/workflows/       # CI 与 Daily Run
+├── .dockerignore            # Docker 构建上下文排除规则
+├── ops/systemd/             # 外部 watchdog 的 user timer 模板
+├── src/wzry_ams/            # 核心包、CLI、Web、登录与 watchdog
+├── tests/                   # 单元与集成测试
+├── CONTEXT.md               # 领域术语与行为契约
+├── Dockerfile               # 生产运行镜像
+├── LICENSE                  # MIT 许可证
+├── pyproject.toml           # 包元数据与 console entry points
+├── uv.lock                  # 可复现依赖锁
+├── cookies.example.txt      # Credential Bundle 格式示例
+└── README.md                # 使用说明与逆向分析报告
+```
 
 ---
 
@@ -137,7 +261,7 @@ isXhrPost=true
 |------|------|------|
 | `iActivityId` | `126433` | 主活动 ID |
 | `iFlowId` | `407551~407556` | 流程 ID |
-| `g_tk` | `ameCSRFToken(skey)` | CSRF Token，默认 skey=`a1b2c3` |
+| `g_tk` | `ameCSRFToken(skey)` | CSRF Token，优先使用 Cookie 中的 `skey`，缺失时回退到 `a1b2c3` |
 | `sArea` | `1` | 平台（1=手Q） |
 | `sPartition` | `1306` | 游戏分区 |
 | `sPlatId` | `1` | 平台 ID |
