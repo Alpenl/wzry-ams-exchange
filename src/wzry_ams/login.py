@@ -42,7 +42,7 @@ WELCOME = r"""
 
 # ── CDP 通信 ──
 
-def _cdp_req(path: str, method: str = "GET", body: dict = None) -> dict:
+def _cdp_req(path: str, method: str = "GET", body: dict | None = None) -> dict:
     url = f"http://localhost:{CDP_PORT}{path}"
     if method == "GET":
         r = requests.get(url, timeout=5)
@@ -55,7 +55,7 @@ def _cdp_req(path: str, method: str = "GET", body: dict = None) -> dict:
     return r.json() if r.text else {}
 
 
-def _cdp_ws_send(ws, method: str, params: dict = None) -> dict:
+def _cdp_ws_send(ws, method: str, params: dict | None = None) -> dict:
     msg_id = random.randint(1, 999999)
     ws.send(json.dumps({"id": msg_id, "method": method, "params": params or {}}))
     timeout = time.time() + 10
@@ -123,7 +123,7 @@ class ChromeManager:
             with contextlib.suppress(Exception):
                 shutil.rmtree(self.profile_dir, ignore_errors=True)
 
-    def get_cookies(self, ws, urls: list[str] = None) -> dict[str, str]:
+    def get_cookies(self, ws, urls: list[str] | None = None) -> dict[str, str]:
         if urls is None:
             urls = [
                 "https://pvp.qq.com", "https://game.qq.com",

@@ -118,8 +118,8 @@ def save_cookies_file(cookies: dict[str, str], path: str):
                 f.write(f"{k}={v}\n")
 
 
-def get_user_info(cookies: dict[str, str]) -> dict[str, str]:
-    info = {
+def get_user_info(cookies: dict[str, str]) -> dict[str, str | bool]:
+    info: dict[str, str | bool] = {
         "openid": cookies.get("openid", "")[:20] + "...",
         "acctype": cookies.get("acctype", "?"),
     }
