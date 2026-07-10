@@ -7,13 +7,20 @@ dist/
 build/
 .venv/
 .pytest_cache/
-
-# uv
-uv.lock
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+coverage.xml
+htmlcov/
 
 # Secrets
 cookies.txt
 *.cookies
+*.cookie
+credentials.json
+*.credentials
+*.credentials.json
 
 # Logs
 exchange.log

@@ -1,0 +1,58 @@
+# Version control and CI metadata
+.git
+.github
+.gitignore
+.gitattributes
+
+# Python environments and caches
+.venv
+venv
+env
+__pycache__
+**/__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.pyright
+
+# Build and test output
+build
+dist
+htmlcov
+coverage.xml
+.coverage
+*.tsbuildinfo
+
+# Credentials and local configuration
+cookies.txt
+*.cookies
+*.cookie
+credentials.json
+*.credentials
+*.credentials.json
+.env
+.env.*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Runtime logs
+exchange.log
+*.log
+
+# Editor and operating-system files
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Repository-only material not needed by the runtime image
+tests
+CONTEXT.md
+ops
+docker-build

@@ -6,47 +6,105 @@ on:
   pull_request:
     branches: [master, main]
 
+permissions:
+  contents: read
+
 jobs:
-  lint:
-    runs-on: ubuntu-latest
+  quality:
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: '0.9.28'
+          python-version: '3.13'
           enable-cache: true
-      - run: uv sync --group dev
-      - run: uv run ruff check src/ tests/
+          cache-dependency-glob: uv.lock
+      - run: uv sync --locked --group dev
+      - run: uv run --no-sync ruff check src/ tests/
+      - run: uv run --no-sync pyright src/
+      - run: uv run --no-sync pytest tests/ -v
 
-  typecheck:
-    runs-on: ubuntu-latest
+  minimum-python:
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          enable-cache: true
-      - run: uv sync --group dev
-      - run: uv run pyright src/
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
+          version: '0.9.28'
+          python-version: '3.10'
           enable-cache: true
-      - run: uv sync --group dev
-      - run: uv run pytest tests/ -v
+          cache-dependency-glob: uv.lock
+      - run: uv sync --locked --group dev
+      - run: uv run --no-sync pytest tests/ -v
 
   build:
-    runs-on: ubuntu-latest
-    needs: [lint, typecheck, test]
+    runs-on: ubuntu-24.04
+    needs: [quality, minimum-python]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: '0.9.28'
+          python-version: '3.13'
           enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv lock --check
       - run: uv build
-      - uses: actions/upload-artifact@v4
+      - name: Smoke test built wheel
+        run: |
+          uv venv /tmp/wheel-smoke --python 3.13
+          uv pip install --python /tmp/wheel-smoke/bin/python dist/*.whl
+          export PATH="/tmp/wheel-smoke/bin:$PATH"
+          wzry-exchange --list
+          wzry-login --help
+          wzry-web --help
+          wzry-watchdog --help
+      - name: Build and smoke test production image
+        env:
+          DOCKER_BUILDKIT: '1'
+        run: |
+          set -euo pipefail
+          image=wzry-ams-exchange:ci
+          container=wzry-ams-exchange-ci
+          trap 'docker rm --force --volumes "$container" >/dev/null 2>&1 || true' EXIT
+
+          docker build --tag "$image" .
+          test "$(docker run --rm --entrypoint id "$image" -u)" = "10001"
+
+          docker run --detach --name "$container" \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges=true \
+            --health-interval 1s \
+            --health-start-period 1s \
+            --health-timeout 3s \
+            --health-retries 10 \
+            "$image"
+
+          for attempt in $(seq 1 30); do
+            health=$(docker inspect --format '{{.State.Health.Status}}' "$container")
+            if [ "$health" = healthy ]; then
+              break
+            fi
+            if [ "$health" = unhealthy ] || [ "$attempt" -eq 30 ]; then
+              docker logs "$container"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          test "$(docker exec "$container" id -u)" = "10001"
+          docker exec "$container" python -c \
+            "import json, urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8080/api/status', timeout=2)); assert data['has_cookie'] is False"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist
           path: dist/
