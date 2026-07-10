@@ -1,52 +1,61 @@
-"""王者荣耀体验服兑换 Web 应用 (FastAPI 单文件)."""
+"""FastAPI adapter for the reward exchange modules."""
+
+from __future__ import annotations
 
 import json
 import os
 import re
+from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
+from typing import Protocol
 
 import uvicorn
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
 
-from .exchange import ExchangeClient
-from .utils import (
+from .credentials import CredentialError, Credentials, CredentialStore
+from .exchange import (
     ICON_BASE,
     PVP_PAGE,
-    REQUIRED_COOKIES,
     REWARD_MAP,
-    get_user_info,
-    load_cookies_file,
-    parse_cookies,
-    save_cookies_file,
+    ExchangeClient,
+    OutcomeKind,
+    RedemptionOutcome,
 )
 
-# ── 应用 ──
+DEFAULT_COOKIE_FILE = Path(os.environ.get("WZRY_COOKIE_FILE", Path.cwd() / "cookies.txt"))
+DEFAULT_LOG_FILE = Path(os.environ.get("WZRY_LOG_FILE", Path.cwd() / "exchange.log"))
 
-app = FastAPI(title="王者荣耀体验服兑换", version="1.0.0", docs_url=None)
 
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-COOKIE_FILE = os.path.join(SCRIPT_DIR, "cookies.txt")
-LOG_FILE = os.path.join(SCRIPT_DIR, "exchange.log")
+class RedemptionPort(Protocol):
+    def redeem(self, reward_id: str) -> RedemptionOutcome: ...
+
+
+ClientFactory = Callable[[Credentials], RedemptionPort]
 
 
 # ── 日志 ──
 
-def _log(reward_name: str, result: dict):
+def _log(log_file: Path, outcome: RedemptionOutcome) -> None:
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    status = "OK" if result.get("ok") else "FAIL"
-    line = f"[{ts}] {status} {reward_name} - {result.get('msg', '')}\n"
+    status = "OK" if outcome.satisfied else "FAIL"
+    reward_name = outcome.reward.name if outcome.reward else outcome.reward_id
+    message = outcome.message.replace("\n", " ")
+    line = f"[{ts}] {status} {reward_name} - {message}\n"
     try:
-        with open(LOG_FILE, "a") as f:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with log_file.open("a", encoding="utf-8") as f:
             f.write(line)
-    except Exception:
+    except OSError:
         pass
 
 
-def _read_logs(limit: int = 30) -> list:
-    logs = []
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE) as f:
+def _read_logs(log_file: Path, limit: int = 30) -> list[dict[str, str]]:
+    logs: list[dict[str, str]] = []
+    if log_file.exists():
+        with log_file.open(encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 m = re.match(r"\[(.+?)\] (\w+) (.+?) - (.+)", line)
@@ -182,11 +191,17 @@ async function init() {{
 async function checkStatus() {{
   const r = await fetch('/api/status');
   const d = await r.json();
-  if (d.has_cookie) {{
+  if (d.exchange_ready) {{
     document.getElementById('status-text').textContent = '已登录';
     document.getElementById('status-text').style.color = '#27ae60';
     document.getElementById('balance-text').textContent = d.exp_voucher || '?';
     document.getElementById('area-text').textContent = (d.area||'?')+'/'+(d.partition||'?');
+  }} else if (d.has_cookie) {{
+    document.getElementById('status-text').textContent = '凭据不完整';
+    document.getElementById('status-text').style.color = '#e67e22';
+    document.getElementById('balance-text').textContent = d.exp_voucher || '?';
+    document.getElementById('area-text').textContent = '---';
+    document.getElementById('cookie-form-card').classList.remove('hidden');
   }} else {{
     document.getElementById('status-text').textContent = '未登录';
     document.getElementById('status-text').style.color = '#e74c3c';
@@ -238,13 +253,12 @@ function renderRewards() {{
     div.innerHTML = '<img src="'+ICON_BASE+r.icon+'" class="reward-icon" onerror="this.style.display=\\'none\\'">'
       + '<div class="reward-name">'+r.name+'</div>'
       + '<div class="reward-cost">体验币: <span>'+r.cost+'</span></div>'
-      + '<button class="btn btn-gold btn-sm" style="width:100%" onclick="exchange(\\''+id+'\\')">兑换</button>';
+      + '<button class="btn btn-gold btn-sm" style="width:100%" onclick="exchange(\\''+id+'\\', this)">兑换</button>';
     grid.appendChild(div);
   }}
 }}
 
-async function exchange(id) {{
-  const btn = event.target;
+async function exchange(id, btn) {{
   btn.disabled = true;
   btn.textContent = '…';
   try {{
@@ -266,10 +280,21 @@ async function loadLog() {{
   const r = await fetch('/api/log');
   const d = await r.json();
   const c = document.getElementById('log-container');
-  if (!d.logs.length) {{ c.innerHTML = '<div class="log-line" style="color:#4a5580">暂无记录</div>'; return; }}
-  c.innerHTML = [...d.logs].reverse().map(l =>
-    '<div class="log-line '+(l.status==='OK'?'log-ok':'log-fail')+'">'+l.time+' '+l.status+' '+l.name+' — '+l.msg+'</div>'
-  ).join('');
+  c.replaceChildren();
+  if (!d.logs.length) {{
+    const empty = document.createElement('div');
+    empty.className = 'log-line';
+    empty.style.color = '#4a5580';
+    empty.textContent = '暂无记录';
+    c.appendChild(empty);
+    return;
+  }}
+  for (const l of [...d.logs].reverse()) {{
+    const row = document.createElement('div');
+    row.className = 'log-line '+(l.status==='OK'?'log-ok':'log-fail');
+    row.textContent = l.time+' '+l.status+' '+l.name+' — '+l.msg;
+    c.appendChild(row);
+  }}
 }}
 
 function switchTab(name) {{
@@ -294,93 +319,148 @@ init();
 </html>"""
 
 
-# ── 路由 ──
-
-@app.get("/", response_class=HTMLResponse)
-async def index():
-    return PAGE.replace("{PVP_PAGE}", PVP_PAGE)\
-               .replace("{ICON_BASE}", ICON_BASE)\
-               .replace("{REWARD_JSON}", json.dumps(REWARD_MAP, ensure_ascii=False))
+class CookiePayload(BaseModel):
+    raw: str
 
 
-@app.get("/api/status")
-async def api_status():
-    cookies = load_cookies_file(COOKIE_FILE)
-    has = bool(cookies.get("openid") and cookies.get("access_token"))
-    info = get_user_info(cookies)
-    info["has_cookie"] = has
-    return info
+class ExchangePayload(BaseModel):
+    reward: str
 
 
-@app.post("/api/cookies")
-async def api_save(data: dict):
-    raw = data.get("raw", "")
-    if not raw:
-        return {"ok": False, "msg": "空内容"}
-
-    cookies = parse_cookies(raw)
-    missing = REQUIRED_COOKIES - set(cookies.keys())
-    if missing:
-        return {"ok": False, "msg": f"缺少: {', '.join(missing)}"}
-
-    # 合并已存在的 tyinfo (如果新提交中没有)
-    old = load_cookies_file(COOKIE_FILE)
-    if "a20161115tyf_tyinfo" not in cookies and "a20161115tyf_tyinfo" in old:
-        cookies["a20161115tyf_tyinfo"] = old["a20161115tyf_tyinfo"]
-
-    save_cookies_file(cookies, COOKIE_FILE)
-    return {"ok": True, "msg": f"已保存 {len(cookies)} 个 Cookie"}
-
-
-@app.post("/api/exchange")
-async def api_exchange(data: dict):
-    rid = str(data.get("reward", ""))
-    if rid not in REWARD_MAP:
-        return {"ok": False, "msg": "无效奖励"}
-
-    cookies = load_cookies_file(COOKIE_FILE)
-    if not cookies.get("openid"):
-        return {"ok": False, "msg": "请先设置 Cookie"}
-
-    client = ExchangeClient(cookies)
-    result = client.exchange_reward(rid)
-    _log(REWARD_MAP[rid]["name"], result)
-    return result
+def _credential_status(credentials: Credentials | None) -> dict[str, object]:
+    if credentials is None:
+        return {
+            "has_cookie": False,
+            "exchange_ready": False,
+            "openid": "",
+            "acctype": "?",
+            "exp_voucher": "?",
+            "area": "?",
+            "partition": "?",
+        }
+    identity = credentials.activity_identity
+    openid = credentials.values.get("openid", "")
+    redacted_openid = f"{openid[:8]}..." if openid else ""
+    return {
+        "has_cookie": credentials.is_login_ready,
+        "exchange_ready": credentials.is_exchange_ready,
+        "openid": redacted_openid,
+        "acctype": credentials.values.get("acctype", "?"),
+        "exp_voucher": credentials.experience_voucher,
+        "area": identity.area if identity else "?",
+        "partition": identity.partition if identity else "?",
+    }
 
 
-@app.get("/api/log")
-async def api_log():
-    return {"logs": _read_logs()}
+def _outcome_status(kind: OutcomeKind) -> int:
+    if kind is OutcomeKind.INVALID_REWARD:
+        return 400
+    if kind is OutcomeKind.AUTHENTICATION_FAILED:
+        return 401
+    if kind is OutcomeKind.REJECTED:
+        return 409
+    if kind is OutcomeKind.PROTOCOL_FAILURE:
+        return 502
+    if kind is OutcomeKind.TRANSIENT_FAILURE:
+        return 503
+    return 200
 
 
-@app.delete("/api/cookies")
-async def api_clear():
-    if os.path.exists(COOKIE_FILE):
-        os.remove(COOKIE_FILE)
-    return {"ok": True}
+def create_app(
+    *,
+    cookie_file: str | os.PathLike[str] = DEFAULT_COOKIE_FILE,
+    log_file: str | os.PathLike[str] = DEFAULT_LOG_FILE,
+    client_factory: ClientFactory = ExchangeClient,
+) -> FastAPI:
+    application = FastAPI(title="王者荣耀体验服兑换", version="2.0.0", docs_url=None)
+    store = CredentialStore(cookie_file)
+    log_path = Path(log_file)
+
+    @application.get("/", response_class=HTMLResponse)
+    def index() -> str:
+        return PAGE.format(
+            PVP_PAGE=PVP_PAGE,
+            ICON_BASE=ICON_BASE,
+            REWARD_JSON=json.dumps(REWARD_MAP, ensure_ascii=False),
+        )
+
+    @application.get("/api/status")
+    def api_status() -> dict[str, object]:
+        try:
+            return _credential_status(store.load())
+        except CredentialError as error:
+            return {**_credential_status(None), "credential_error": str(error)}
+
+    @application.post("/api/cookies")
+    def api_save(data: CookiePayload) -> JSONResponse:
+        try:
+            credentials = Credentials.parse(data.raw).require_login_ready()
+            saved = store.replace(credentials)
+        except CredentialError as error:
+            return JSONResponse({"ok": False, "msg": str(error)}, status_code=400)
+        return JSONResponse(
+            {
+                "ok": True,
+                "msg": f"已安全保存 {len(saved.values)} 个 Cookie",
+                "exchange_ready": saved.is_exchange_ready,
+            }
+        )
+
+    @application.post("/api/exchange")
+    def api_exchange(data: ExchangePayload) -> JSONResponse:
+        try:
+            credentials = store.load(required=True).require_exchange_ready()
+        except CredentialError as error:
+            return JSONResponse({"satisfied": False, "msg": str(error)}, status_code=401)
+
+        outcome = client_factory(credentials).redeem(data.reward)
+        _log(log_path, outcome)
+        payload = outcome.to_dict()
+        payload["ok"] = outcome.satisfied
+        payload["msg"] = outcome.message
+        return JSONResponse(payload, status_code=_outcome_status(outcome.kind))
+
+    @application.get("/api/log")
+    def api_log() -> dict[str, list[dict[str, str]]]:
+        return {"logs": _read_logs(log_path)}
+
+    @application.delete("/api/cookies")
+    def api_clear() -> dict[str, bool]:
+        store.clear()
+        return {"ok": True}
+
+    return application
 
 
-# ── 启动入口 ──
+app = create_app()
 
-def main():
+
+def main() -> None:
     import argparse
-    ap = argparse.ArgumentParser(description="王者荣耀体验服兑换 Web 应用")
-    ap.add_argument("--port", "-p", type=int, default=8080)
-    ap.add_argument("--host", default="0.0.0.0")
-    ap.add_argument("--cookies", help="启动时加载的 Cookie 文件")
-    args = ap.parse_args()
 
-    if args.cookies and os.path.exists(args.cookies):
-        with open(args.cookies) as f:
-            cookies = parse_cookies(f.read())
-        if cookies:
-            save_cookies_file(cookies, COOKIE_FILE)
-            print(f"[*] 已加载 {len(cookies)} 个 Cookie")
+    parser = argparse.ArgumentParser(description="王者荣耀体验服兑换 Web 应用")
+    parser.add_argument("--port", "-p", type=int, default=int(os.environ.get("WZRY_PORT", 8080)))
+    parser.add_argument("--host", default=os.environ.get("WZRY_HOST", "127.0.0.1"))
+    parser.add_argument("--cookies", help="启动时导入的 Credential Bundle 文件")
+    args = parser.parse_args()
+
+    if args.cookies:
+        try:
+            imported = CredentialStore(args.cookies).load(required=True)
+            CredentialStore(DEFAULT_COOKIE_FILE).replace(imported)
+        except CredentialError as error:
+            raise SystemExit(f"Credential Bundle 导入失败: {error}") from error
+        print(f"[*] 已导入 {len(imported.values)} 个 Cookie")
 
     print("  王者荣耀体验服兑换 Web 应用")
     print(f"  http://{args.host}:{args.port}")
-    uvicorn.run("wzry_ams.web:app", host=args.host, port=args.port,
-                log_level="info", reload=False)
+    uvicorn.run(
+        "wzry_ams.web:app",
+        host=args.host,
+        port=args.port,
+        log_level="info",
+        reload=False,
+    )
 
 
 if __name__ == "__main__":
