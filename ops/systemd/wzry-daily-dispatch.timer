@@ -1,0 +1,9 @@
+[Unit]
+Description=Trigger the WZRY Daily Run at 09:17 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 09:17:00 Asia/Shanghai
+Unit=wzry-daily-dispatch.service
+
+[Install]
+WantedBy=timers.target

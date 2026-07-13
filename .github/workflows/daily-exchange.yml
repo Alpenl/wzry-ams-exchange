@@ -1,16 +1,7 @@
 name: daily-exchange
 
 on:
-  schedule:
-    # Beijing 09:17 (UTC 01:17), away from GitHub's top-of-hour load spike.
-    - cron: '17 1 * * *'
   workflow_dispatch:
-    inputs:
-      random_delay:
-        description: Apply the scheduled random delay to this manual run
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -22,7 +13,7 @@ concurrency:
 jobs:
   exchange:
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -48,13 +39,6 @@ jobs:
           fi
           umask 077
           printf '%s' "$CREDENTIAL_BUNDLE" > cookies.txt
-
-      - name: Random delay
-        if: github.event_name == 'schedule' || inputs.random_delay == true
-        run: |
-          DELAY=$(( RANDOM % 7200 ))
-          echo "Sleeping ${DELAY}s (~$((DELAY/60))min)..."
-          sleep "$DELAY"
 
       - name: Redeem Daily Run
         run: uv run --no-sync wzry-exchange -c cookies.txt --all

@@ -1,0 +1,7 @@
+[Unit]
+Description=Trigger the WZRY Daily Run on GitHub Actions
+
+[Service]
+Type=oneshot
+TimeoutStartSec=2min
+ExecStart=/usr/bin/gh workflow run daily-exchange.yml --repo Alpenl/wzry-ams-exchange --ref master

@@ -126,7 +126,7 @@ docker run --rm --name wzry-ams-exchange \
 
 ## 每日自动运行
 
-`.github/workflows/daily-exchange.yml` 是主触发器：它在 GitHub Actions 中执行每日 Exchange Plan，也支持 `workflow_dispatch` 手动补跑。仓库 Secret `COOKIES_FILE` 必须包含有效凭据。
+`.github/workflows/daily-exchange.yml` 是远端执行器：它只接受 `workflow_dispatch`，在 GitHub Actions 中执行每日 Exchange Plan。主触发器是本机的 systemd user timer，仓库 Secret `COOKIES_FILE` 必须包含有效凭据。
 
 每次重新扫码后，用 GitHub CLI 轮换 Secret：
 
@@ -135,14 +135,42 @@ uv run wzry-login --output cookies.txt
 gh secret set COOKIES_FILE < cookies.txt
 ```
 
-GitHub Actions 可以自动执行兑换，但无法代替交互式 QQ 登录续期。静态 Secret 过期后，主任务和 watchdog 补跑都会如实失败；watchdog 解决的是调度漏跑，不是认证续期。需要真正长期无人值守时，必须在受控的外部执行端实现凭据刷新并轮换 Secret，或把 Daily Run 一并迁移到该执行端。
+GitHub Actions 可以执行兑换，但无法代替交互式 QQ 登录续期。静态 Secret 过期后，主任务和 watchdog 补跑都会如实失败；watchdog 解决的是调度漏跑，不是认证续期。需要真正长期无人值守时，必须在受控的外部执行端实现凭据刷新并轮换 Secret，或把 Daily Run 一并迁移到该执行端。
 
-GitHub 的 `schedule` 是 best-effort 调度，可能延迟，极端情况下可能丢弃。当前 cron 已避开整点高峰，但这不构成“每日必达”保证。因此工程化方案把两个角色分开：
+自动运行分成三个角色：
 
 | 角色 | 责任 | 边界 |
 |------|------|------|
-| Daily workflow | 执行兑换并产出可信的成功/失败状态 | 不保证 GitHub 一定准时创建 run |
-| 外部 watchdog | 从 GitHub 之外检查当天是否已有成功或仍在运行的 Daily Run | 默认只检查；只有显式授权才补触发 |
+| 本机 dispatch timer | 每天北京时间 `09:17` 请求一次 `workflow_dispatch` | 机器关机时不会补触发 |
+| Daily workflow | 执行兑换并产出可信的成功/失败状态 | 不负责调度，也不在 runner 内等待 |
+| 可选 watchdog | 检查当天是否已有成功或仍在运行的 Daily Run | 默认只检查；只有显式授权才补触发 |
+
+本机 timer 直接使用当前用户的 GitHub CLI 登录，不复制 Token。先确认 `gh` 已登录，再安装并启用 unit：
+
+```bash
+gh auth status
+install -d ~/.config/systemd/user
+install -m 644 ops/systemd/wzry-daily-dispatch.service ~/.config/systemd/user/
+install -m 644 ops/systemd/wzry-daily-dispatch.timer ~/.config/systemd/user/
+
+systemctl --user daemon-reload
+systemctl --user enable --now wzry-daily-dispatch.timer
+systemctl --user list-timers wzry-daily-dispatch.timer
+```
+
+timer 不使用 `Persistent=true`，因此不会在次日启动机器时补发昨天的任务。无常驻登录会话的机器还需要为当前用户启用 systemd lingering；机器本身必须在触发时间保持运行：
+
+```bash
+sudo loginctl enable-linger "$USER"
+```
+
+通过 journal 查看触发结果：
+
+```bash
+journalctl --user -u wzry-daily-dispatch.service --since today
+```
+
+### 可选 watchdog
 
 watchdog 的推荐调用方式：
 
@@ -157,7 +185,7 @@ uv run wzry-watchdog --repo OWNER/REPO --workflow daily-exchange.yml
 uv run wzry-watchdog --repo OWNER/REPO --workflow daily-exchange.yml --dispatch
 ```
 
-watchdog 从 `WZRY_GITHUB_TOKEN` 或 `GITHUB_TOKEN` 读取凭据。默认检查模式发现缺少有效 Daily Run 时返回非零退出码，方便监控系统告警；`--dispatch` 才会改变 GitHub 状态。它必须运行在独立于 GitHub `schedule` 的调度器上，例如 systemd timer、云定时任务或另一套 CI。不要把 watchdog 安排在主 cron 同一时刻，应留出正常调度与运行所需的缓冲时间。
+watchdog 从 `WZRY_GITHUB_TOKEN` 或 `GITHUB_TOKEN` 读取凭据。默认检查模式发现缺少有效 Daily Run 时返回非零退出码，方便监控系统告警；`--dispatch` 才会改变 GitHub 状态。不要把 watchdog 安排在主 timer 同一时刻，应留出正常运行所需的缓冲时间。
 
 仓库提供了 [systemd user timer 模板](ops/systemd/)，默认在北京时间 `11:30` 和 `13:30` 检查。timer 不使用 `Persistent=true`，因此不会在次日登录时把昨日漏掉的检查错误补到今天。GitHub API 的临时网络失败会在单次检查中进行三次有界重试。
 
@@ -176,7 +204,7 @@ systemctl --user enable --now wzry-watchdog.timer
 systemctl --user list-timers wzry-watchdog.timer
 ```
 
-无常驻登录会话的服务器还需要启用该用户的 systemd lingering，或将模板改为系统级 unit；否则用户退出登录后 timer 可能不会继续运行。
+watchdog 和主 dispatch timer 使用相同的 user systemd 实例，因此共用前述 lingering 要求。
 
 ## 项目结构
 

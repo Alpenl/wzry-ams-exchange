@@ -312,3 +312,42 @@ def test_systemd_user_service_has_no_ineffective_network_or_boot_hook():
     assert "[Install]" not in service
     assert "${WZRY_PROJECT_DIR}/.venv/bin/wzry-watchdog" in service
     assert "%h/.local/bin/wzry-watchdog" not in service
+
+
+def test_daily_dispatch_timer_runs_once_at_0917_shanghai():
+    timer = (
+        Path(__file__).parents[1] / "ops/systemd/wzry-daily-dispatch.timer"
+    ).read_text()
+
+    assert timer.count("OnCalendar=") == 1
+    assert "OnCalendar=*-*-* 09:17:00 Asia/Shanghai" in timer
+    assert "Unit=wzry-daily-dispatch.service" in timer
+    assert "Persistent=" not in timer
+    assert "RandomizedDelaySec=" not in timer
+
+
+def test_daily_dispatch_service_uses_the_authenticated_gh_cli():
+    service = (
+        Path(__file__).parents[1] / "ops/systemd/wzry-daily-dispatch.service"
+    ).read_text()
+
+    assert "Type=oneshot" in service
+    assert "TimeoutStartSec=2min" in service
+    assert (
+        "ExecStart=/usr/bin/gh workflow run daily-exchange.yml "
+        "--repo Alpenl/wzry-ams-exchange --ref master"
+    ) in service
+    assert "[Install]" not in service
+
+
+def test_daily_workflow_is_dispatch_only_and_never_sleeps():
+    workflow = (
+        Path(__file__).parents[1] / ".github/workflows/daily-exchange.yml"
+    ).read_text()
+
+    assert "workflow_dispatch:" in workflow
+    assert "schedule:" not in workflow
+    assert "random_delay" not in workflow
+    assert "RANDOM" not in workflow
+    assert "sleep " not in workflow
+    assert "timeout-minutes: 15" in workflow
