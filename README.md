@@ -126,7 +126,7 @@ docker run --rm --name wzry-ams-exchange \
 
 ## 每日自动运行
 
-`.github/workflows/daily-exchange.yml` 是远端执行器：它只接受 `workflow_dispatch`，在 GitHub Actions 中执行每日 Exchange Plan。主触发器是本机的 systemd user timer，仓库 Secret `COOKIES_FILE` 必须包含有效凭据。
+`.github/workflows/daily-exchange.yml` 是远端执行器：它只接受 `workflow_dispatch`，在 GitHub Actions 中执行每日 Exchange Plan。当前计划只兑换 Reward `3`（星币福袋，60 体验券）和 Reward `4`（碎片福袋，80 体验券）。主触发器是本机的 systemd user timer，仓库 Secret `COOKIES_FILE` 必须包含有效凭据。
 
 每次重新扫码后，用 GitHub CLI 轮换 Secret：
 

@@ -20,7 +20,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="王者荣耀体验服 AMS 兑换")
     parser.add_argument("-c", "--cookies", default="cookies.txt", help="Cookie 文件")
     action = parser.add_mutually_exclusive_group(required=True)
-    action.add_argument("--reward", "-r", help="奖励编号 (1-6)")
+    action.add_argument(
+        "--reward",
+        "-r",
+        action="append",
+        help="奖励编号 (1-6)，可重复指定",
+    )
     action.add_argument("--all", action="store_true", help="依次兑换全部奖励")
     action.add_argument("--list", action="store_true", help="列出奖励")
     parser.add_argument("--loop", type=int, default=1, help="重复兑换同一奖励")
@@ -80,6 +85,8 @@ def main(
         parser.error("--loop 必须大于 0")
     if args.all and args.loop != 1:
         parser.error("--all 不能与 --loop 一起使用")
+    if args.reward and len(args.reward) > 1 and args.loop != 1:
+        parser.error("多个 --reward 不能与 --loop 一起使用")
 
     try:
         credentials = CredentialStore(args.cookies).load(required=True)
@@ -94,10 +101,12 @@ def main(
     client = factory(credentials)
     if args.all:
         report = client.redeem_all()
+    elif len(args.reward) > 1:
+        report = client.redeem_many(args.reward)
     else:
         outcomes = []
         for index in range(args.loop):
-            outcomes.append(client.redeem(str(args.reward)))
+            outcomes.append(client.redeem(str(args.reward[0])))
             if index < args.loop - 1:
                 time.sleep(args.interval)
         report = ExchangeReport(tuple(outcomes))

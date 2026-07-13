@@ -41,7 +41,7 @@ jobs:
           printf '%s' "$CREDENTIAL_BUNDLE" > cookies.txt
 
       - name: Redeem Daily Run
-        run: uv run --no-sync wzry-exchange -c cookies.txt --all
+        run: uv run --no-sync wzry-exchange -c cookies.txt -r 3 -r 4
 
       - name: Remove Credential Bundle
         if: always()

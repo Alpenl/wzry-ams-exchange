@@ -27,9 +27,11 @@ def valid_credentials() -> Credentials:
 class FakeAmsAdapter:
     def __init__(self, responses: list[Mapping[str, Any]]):
         self.responses = list(responses)
+        self.reward_ids: list[str] = []
 
     def redeem(self, reward: Reward, skey: str) -> Mapping[str, Any]:
-        del reward, skey
+        del skey
+        self.reward_ids.append(reward.id)
         return self.responses.pop(0)
 
 
@@ -90,6 +92,26 @@ def test_json_output_and_exit_code_are_truthful(tmp_path: Path, capsys):
     assert exit_code == 1
     assert payload["satisfied"] is False
     assert payload["outcomes"][0]["kind"] == "rejected"
+
+
+def test_repeated_reward_options_build_one_ordered_exchange_plan(tmp_path: Path, capsys):
+    path = tmp_path / "credentials.json"
+    write_credentials(path)
+    adapter = FakeAmsAdapter(
+        [
+            response(success=True, message="星币福袋兑换成功"),
+            response(success=True, message="碎片福袋兑换成功"),
+        ]
+    )
+
+    exit_code = main(
+        ["--cookies", str(path), "--reward", "3", "--reward", "4"],
+        client_factory=lambda credentials: ExchangeClient(credentials, adapter=adapter),
+    )
+
+    assert exit_code == 0
+    assert adapter.reward_ids == ["3", "4"]
+    assert "Plan: SATISFIED (2/2)" in capsys.readouterr().out
 
 
 def test_missing_credentials_returns_configuration_error(tmp_path: Path, capsys):

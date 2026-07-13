@@ -351,3 +351,5 @@ def test_daily_workflow_is_dispatch_only_and_never_sleeps():
     assert "RANDOM" not in workflow
     assert "sleep " not in workflow
     assert "timeout-minutes: 15" in workflow
+    assert "wzry-exchange -c cookies.txt -r 3 -r 4" in workflow
+    assert "--all" not in workflow
