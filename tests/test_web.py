@@ -42,9 +42,11 @@ def test_homepage_renders_valid_template_and_explicit_button_target(tmp_path: Pa
 
     assert response.status_code == 200
     assert "{{" not in response.text
-    assert "async function init() {" in response.text
-    assert "async function exchange(id, btn) {" in response.text
-    assert "const btn = event.target" not in response.text
+    assert "/static/app.js" in response.text
+    script = TestClient(app).get("/static/app.js").text
+    assert "async function init() {" in script
+    assert "async function exchange(id, btn) {" in script
+    assert "const btn = event.target" not in script
 
 
 def test_status_without_credentials_is_logged_out(tmp_path: Path):
@@ -137,11 +139,11 @@ def test_log_page_uses_text_content_for_untrusted_ams_messages(tmp_path: Path):
 
     exchange_response = client.post("/api/exchange", json={"reward": "3"})
     log_response = client.get("/api/log")
-    page = client.get("/").text
+    page = client.get("/static/app.js").text
 
     assert exchange_response.status_code == 409
     assert log_response.json()["logs"][0]["msg"] == malicious
-    assert "row.textContent = " in page
+    assert "td.textContent=row.message" in page
     assert "'+l.msg+'</div>'" not in page
 
 

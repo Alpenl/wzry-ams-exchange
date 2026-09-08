@@ -101,6 +101,9 @@ Credential Bundle 是面向单一 AMS 端点的 `name -> value` 投影，不保�
 
 ## Docker
 
+NAS 独立每日兑换部署见 [DOCKER.md](DOCKER.md)，专用配置位于 `ops/nas/docker-compose.yml`。
+该模式包含容器内调度、持久化每日结果和 Web 密码认证，不依赖 GitHub Actions。
+
 镜像采用固定版本及 digest 的 Python 与 uv、多阶段锁定安装，并以非 root 用户运行。构建时不会包含 `cookies.txt`、日志、Git 元数据或本地虚拟环境：
 
 ```bash

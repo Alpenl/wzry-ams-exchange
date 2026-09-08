@@ -40,6 +40,8 @@ id_rsa*
 id_ed25519*
 
 # Runtime logs
+data
+*.sqlite3*
 exchange.log
 *.log
 

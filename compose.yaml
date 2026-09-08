@@ -1,0 +1,31 @@
+services:
+  wzry:
+    image: ghcr.io/alpenl/wzry-ams-exchange:latest
+    build: .
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 75s
+    ports:
+      - "${WZRY_BIND_IP:-127.0.0.1}:${WZRY_PORT:-18080}:8080"
+    environment:
+      TZ: Asia/Shanghai
+      WZRY_SCHEDULE_ENABLED: "true"
+      WZRY_DAILY_TIME: "${WZRY_DAILY_TIME:-09:17}"
+      WZRY_STATE_FILE: /data/schedule.sqlite3
+      WZRY_AUTH_ENABLED: "true"
+    volumes:
+      - wzry-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+volumes:
+  wzry-data:

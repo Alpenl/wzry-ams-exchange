@@ -13,6 +13,10 @@ build/
 .coverage
 coverage.xml
 htmlcov/
+docker-build/
+data/
+*.sqlite3
+*.sqlite3-journal
 
 # Secrets
 cookies.txt

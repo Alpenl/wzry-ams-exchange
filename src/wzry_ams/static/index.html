@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light"><title>体验服 · 兑换管理台</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script defer src="/static/lucide.min.js"></script><script defer src="/static/app.js"></script>
+</head>
+<body>
+<div id="auth-screen" class="auth-screen" hidden>
+  <div class="auth-brand"><span class="brand-mark"><i data-lucide="command"></i></span><span>体验服 <small>REWARD CONSOLE</small></span></div>
+  <form id="auth-form" class="auth-form">
+    <div class="eyebrow">王者荣耀 · 体验服</div><h1 id="auth-title">欢迎回来</h1>
+    <p id="auth-subtitle" class="muted">登录兑换管理台</p>
+    <label>管理员<input value="admin" disabled autocomplete="username"></label>
+    <label>密码<input id="auth-password" type="password" autocomplete="current-password" required maxlength="256" placeholder="输入管理员密码"></label>
+    <label id="confirm-label" hidden>确认密码<input id="auth-confirm" type="password" autocomplete="new-password" placeholder="再次输入密码"></label>
+    <div id="auth-error" class="form-error" role="alert"></div><button class="primary" type="submit" id="auth-submit">登录<i data-lucide="arrow-right"></i></button>
+  </form><span class="auth-footer">EXPERIENCE SERVER / DAILY REWARDS</span>
+</div>
+<div id="app-shell" class="app-shell" hidden>
+  <aside class="sidebar">
+    <a class="brand" href="#overview"><span class="brand-mark"><i data-lucide="command"></i></span><span>体验服<small>REWARD CONSOLE</small></span></a>
+    <div class="nav-caption">工作台</div>
+    <nav aria-label="主导航">
+      <button data-view="overview" class="active"><i data-lucide="layout-dashboard"></i><span>概览</span></button>
+      <button data-view="rewards"><i data-lucide="gift"></i><span>奖励兑换</span><span class="nav-count">6</span></button>
+      <button data-view="history"><i data-lucide="history"></i><span>任务记录</span></button>
+      <button data-view="credentials"><i data-lucide="key-round"></i><span>凭据管理</span></button>
+      <button data-view="settings"><i data-lucide="sliders-horizontal"></i><span>设置</span></button>
+    </nav>
+    <div class="sidebar-bottom"><div class="node-label"><span class="pulse"></span>独立服务</div><div class="account-row"><span class="avatar">A</span><div>管理员<small>admin</small></div><button id="logout" class="icon-button" title="退出登录" aria-label="退出登录"><i data-lucide="log-out"></i></button></div></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><div>工作台 <span>/</span> <strong id="breadcrumb">概览</strong></div><div class="topbar-right"><span id="today"></span><button id="refresh" class="icon-button" title="刷新数据" aria-label="刷新数据"><i data-lucide="refresh-cw"></i></button></div></header>
+    <main>
+      <div class="page-heading"><div><div class="eyebrow">EXPERIENCE SERVER</div><h1 id="page-title">每日奖励，一目了然。</h1><p id="page-description" class="muted">王者荣耀体验服 / 奖励与自动兑换</p></div><span id="connection" class="badge neutral">正在连接</span></div>
+      <section id="view-overview" class="view">
+        <div class="stats">
+          <div class="stat"><div class="stat-label">体验券余额<i data-lucide="coins"></i></div><div class="stat-value" id="balance">—</div><div class="stat-note">凭据最近记录的余额</div></div>
+          <div class="stat"><div class="stat-label">今日自动任务<i data-lucide="circle-check"></i></div><div class="stat-value"><span id="completed">0</span><small> / 2</small></div><div class="stat-note" id="completion-note">等待任务执行</div></div>
+          <div class="stat"><div class="stat-label">每日执行时间<i data-lucide="clock-3"></i></div><div class="stat-value" id="daily-time">09:17</div><div class="stat-note" id="timezone">Asia/Shanghai</div></div>
+          <div class="stat"><div class="stat-label">账户凭据<i data-lucide="shield-check"></i></div><div class="stat-value status-value" id="credential-state">未配置</div><div class="stat-note" id="account-id">尚未关联账号</div></div>
+        </div>
+        <div id="credential-banner" class="notice"><span class="notice-icon"><i data-lucide="key-round"></i></span><div><strong id="banner-title">连接你的游戏账号</strong><p id="banner-detail">账户凭据尚未配置</p></div><button class="text-button" data-go="credentials">配置凭据<i data-lucide="arrow-up-right"></i></button></div>
+        <div class="section-heading"><h2>每日兑换计划 <span class="badge neutral">2 项奖励</span></h2><button class="text-button" data-go="settings">管理计划<i data-lucide="arrow-right"></i></button></div>
+        <div id="daily-rewards" class="daily-grid"></div>
+        <div class="section-heading"><h2>最近任务</h2><button class="text-button" data-go="history">全部记录<i data-lucide="arrow-right"></i></button></div>
+        <div id="recent-runs" class="table-wrap"></div>
+      </section>
+      <section id="view-rewards" class="view" hidden><div class="section-heading"><h2>活动奖励</h2><span class="muted">6 项可兑换奖励</span></div><div id="reward-grid" class="reward-grid"></div></section>
+      <section id="view-history" class="view" hidden><div class="section-heading"><h2>执行记录</h2><select id="history-filter" aria-label="记录类型"><option value="all">全部记录</option><option value="auto">自动任务</option><option value="manual">手动兑换</option></select></div><div id="history-table" class="table-wrap"></div></section>
+      <section id="view-credentials" class="view" hidden>
+        <div class="form-layout"><div><h2>账户凭据</h2><p class="muted" id="credential-detail">未关联账号</p><div class="field-list"><span>凭据类型 <strong>QQ / AMS</strong></span><span>账户分区 <strong id="partition">—</strong></span><span>凭据完整性 <strong id="credential-check">未配置</strong></span></div><a href="https://pvp.qq.com/cp/a20161115tyf/page2.shtml" target="_blank" rel="noreferrer" class="text-button">前往活动页<i data-lucide="external-link"></i></a></div>
+        <form id="credential-form"><div class="form-header"><h2>更新凭据</h2><label class="upload-button"><i data-lucide="upload"></i>导入文件<input type="file" id="credential-file" accept=".txt,.json" hidden></label></div><label>Cookie / Credential Bundle<textarea id="cookie-input" rows="10" placeholder="openid=…&#10;access_token=…&#10;appid=101491592&#10;acctype=qc&#10;iegams_milo_proxylogin_qc=…&#10;a20161115tyf_tyinfo=…" required spellcheck="false"></textarea></label><div class="form-actions"><button type="button" id="clear-cookie" class="danger-text"><i data-lucide="trash-2"></i>清除凭据</button><button type="submit" class="primary"><i data-lucide="check"></i>保存凭据</button></div></form></div>
+      </section>
+      <section id="view-settings" class="view" hidden><form id="schedule-form" class="settings-form"><h2>自动兑换</h2><div class="setting-row"><div><strong>每日自动执行</strong><p class="muted">星币福袋 · 碎片福袋</p></div><label class="switch"><input id="schedule-enabled" type="checkbox" aria-label="每日自动执行"><span></span></label></div><div class="setting-row"><label for="schedule-time">执行时间</label><input id="schedule-time" type="time" value="09:17" required></div><div class="setting-row"><span>时区</span><strong>Asia/Shanghai</strong></div><div class="setting-row"><span>每日体验券消耗</span><strong>140</strong></div><div class="form-actions"><span class="muted" id="schedule-error"></span><button type="submit" class="primary"><i data-lucide="check"></i>保存设置</button></div></form></section>
+      <footer><span><span class="pulse"></span>体验服兑换管理台</span><span>NAS EDITION · 2.1</span></footer>
+    </main>
+  </div>
+</div>
+<div id="toast" role="status" hidden></div>
+<dialog id="confirm-dialog"><div class="dialog-icon"><i data-lucide="gift"></i></div><h2 id="confirm-title">确认兑换</h2><p id="confirm-text" class="muted"></p><div class="form-actions"><button id="confirm-cancel" class="secondary">取消</button><button id="confirm-ok" class="primary">确认</button></div></dialog>
+</body></html>
