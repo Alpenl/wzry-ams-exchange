@@ -25,6 +25,7 @@ async function checkAuth() {
   const auth=await api('/api/auth/status');
   $('app-shell').hidden=!auth.authenticated; $('auth-screen').hidden=auth.authenticated;
   $('logout').hidden=!auth.enabled;
+  $('logout-top').hidden=!auth.enabled;
   if(!auth.authenticated) {
     authMode=auth.configured?'login':'setup';
     $('auth-title').textContent=auth.configured?'欢迎回来':'创建你的管理台';
@@ -113,6 +114,7 @@ async function init() {
   window.addEventListener('hashchange',()=>go(location.hash.slice(1)));
   $('auth-form').onsubmit=async e=>{e.preventDefault();$('auth-error').textContent='';const password=$('auth-password').value;if(authMode==='setup'&&password!==$('auth-confirm').value){$('auth-error').textContent='两次密码不一致';return;}$('auth-submit').disabled=true;try{await api('/api/auth/'+authMode,{method:'POST',body:JSON.stringify({password})});$('auth-form').reset();if(await checkAuth())await refresh();}catch(error){$('auth-error').textContent=error.message;}finally{$('auth-submit').disabled=false;}};
   $('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'});await checkAuth();}catch(e){toast(e.message);}};
+  $('logout-top').onclick=$('logout').onclick;
   $('refresh').onclick=()=>refresh().catch(e=>toast(e.message));
   $('history-filter').onchange=renderHistory;
   $('credential-file').onchange=async e=>{const f=e.target.files[0];if(f)$('cookie-input').value=await f.text();};
