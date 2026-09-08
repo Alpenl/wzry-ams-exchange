@@ -1,7 +1,11 @@
 [Unit]
 Description=Trigger the WZRY Daily Run on GitHub Actions
+StartLimitIntervalSec=15min
+StartLimitBurst=4
 
 [Service]
 Type=oneshot
 TimeoutStartSec=2min
+Restart=on-failure
+RestartSec=1min
 ExecStart=/usr/bin/gh workflow run daily-exchange.yml --repo Alpenl/wzry-ams-exchange --ref master

@@ -144,7 +144,7 @@ GitHub Actions 可以执行兑换，但无法代替交互式 QQ 登录续期。�
 
 | 角色 | 责任 | 边界 |
 |------|------|------|
-| 本机 dispatch timer | 每天北京时间 `09:17` 请求一次 `workflow_dispatch` | 机器关机时不会补触发 |
+| 本机 dispatch timer | 每天北京时间 `09:17` 请求 `workflow_dispatch`；失败后每分钟重试，最多额外 3 次 | 机器关机时不会补触发 |
 | Daily workflow | 执行兑换并产出可信的成功/失败状态 | 不负责调度，也不在 runner 内等待 |
 | 可选 watchdog | 检查当天是否已有成功或仍在运行的 Daily Run | 默认只检查；只有显式授权才补触发 |
 
